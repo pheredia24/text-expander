@@ -773,9 +773,16 @@ final class TextExpansionEngine: ObservableObject {
     }
 
     private func performReplacement(deleting charactersToDelete: Int, replacement: String, abbreviation: String) {
-        for _ in 0..<charactersToDelete {
-            postKeyEvent(keyCode: backspaceKeyCode)
-        }
+        ReplacementSequence.perform(
+            deleting: charactersToDelete,
+            postBackspace: { self.postKeyEvent(keyCode: self.backspaceKeyCode) },
+            insert: { [weak self] in
+                self?.insertReplacement(replacement, abbreviation: abbreviation)
+            },
+            schedule: { delay, action in
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
+            }
+        )
 
         appendDiagnostic(
             candidateText: replacement,
@@ -784,6 +791,10 @@ final class TextExpansionEngine: ObservableObject {
             result: "posted-\(charactersToDelete)-backspace-events"
         )
 
+        typedBuffer.removeAll()
+    }
+
+    private func insertReplacement(_ replacement: String, abbreviation: String) {
         if usePasteMode {
             lastDecision = "Posted replacement for '\(abbreviation)' in \(lastFrontmostApp) (paste mode)"
             pasteTextWithClipboardRestore(replacement, abbreviation: abbreviation)
@@ -808,7 +819,6 @@ final class TextExpansionEngine: ObservableObject {
         }
 
         playExpansionSound()
-        typedBuffer.removeAll()
     }
 
     private func resolvePhraseWithSlotsIfNeeded(
